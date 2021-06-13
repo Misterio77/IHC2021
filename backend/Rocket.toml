@@ -1,0 +1,2 @@
+[default.databases.database]
+url = "postgres://misterio@localhost/cincobola"

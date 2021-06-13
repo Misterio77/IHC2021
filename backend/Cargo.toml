@@ -1,0 +1,37 @@
+[package]
+name = "cincobola-backend"
+version = "0.1.0"
+authors = ["Gabriel Fontes <eu@misterio.me>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+thiserror = "1.0"
+serde_json = "1.0"
+rust-argon2 = "0.8.3"
+rand = "0.7"
+
+[dependencies.serde]
+version = "1.0"
+features = ["derive"]
+
+[dependencies.rocket]
+version = "0.5.0-rc.1"
+features = ["json"]
+
+[dependencies.rocket_sync_db_pools]
+version = "0.1.0-rc.1"
+features = ["postgres_pool"]
+
+[dependencies.rust_decimal]
+version = "1.14"
+features = ["db-postgres"]
+
+[dependencies.chrono]
+version = "0.4"
+features = ["serde"]
+
+[dependencies.postgres]
+version = "0.19"
+features = ["with-chrono-0_4", "with-serde_json-1"]
