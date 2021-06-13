@@ -3,7 +3,7 @@ use crate::{BodyResult, Database, Error, Result};
 use rocket::http::Status;
 use rocket::response::status;
 use rocket::serde::json::Json;
-use rocket::{get, post, put, delete};
+use rocket::{delete, get, post, put};
 use serde::Deserialize;
 
 #[get("/<email>")]
@@ -87,7 +87,12 @@ struct DeleteRequest {
     password: String,
 }
 #[delete("/<email>", data = "<body>")]
-async fn delete(db: Database, token: Result<UserToken>, body: BodyResult<'_, DeleteRequest>, email: String) -> Result<status::NoContent> {
+async fn delete(
+    db: Database,
+    token: Result<UserToken>,
+    body: BodyResult<'_, DeleteRequest>,
+    email: String,
+) -> Result<status::NoContent> {
     let body = body?;
     db.run(move |db| -> Result<()> {
         let user = User::from_token(db, token?)?;
@@ -98,7 +103,8 @@ async fn delete(db: Database, token: Result<UserToken>, body: BodyResult<'_, Del
                 .build());
         }
         user.delete(db, &body.password)
-    }).await?;
+    })
+    .await?;
     Ok(status::NoContent)
 }
 

@@ -73,11 +73,20 @@ impl TryFrom<Row> for User {
 impl User {
     /// Dado token, busca um usuário na db
     pub fn from_token(db: &mut postgres::Client, token: UserToken) -> Result<User> {
-        let row = db.query_one("SELECT email, name, password, sessions.id AS session_id FROM users INNER JOIN sessions ON sessions.user_email = users.email WHERE sessions.token = $1", &[&token.0]).map_err(|e| {
-            Error::builder_from(e)
-                .code(Status::Unauthorized)
-                .description("Sessão inválida")
-        })?;
+        let row = db
+            .query_one(
+                "SELECT email, name, password, sessions.id AS session_id
+                FROM users
+                INNER JOIN sessions
+                ON sessions.user_email = users.email
+                WHERE sessions.token = $1",
+                &[&token.0],
+            )
+            .map_err(|e| {
+                Error::builder_from(e)
+                    .code(Status::Unauthorized)
+                    .description("Sessão inválida")
+            })?;
         let session_id: i32 = row.try_get("session_id")?;
         db.execute("UPDATE sessions SET used=now() WHERE id=$1", &[&session_id])?;
         row.try_into()
@@ -90,7 +99,9 @@ impl User {
     ) -> Result<Self> {
         let user: User = db
             .query_one(
-                "SELECT email, name, password FROM users WHERE email = $1",
+                "SELECT email, name, password
+                FROM users
+                WHERE email = $1",
                 &[&email],
             )
             .map_err(|e| {
@@ -116,7 +127,8 @@ impl User {
             .map(char::from)
             .collect();
         db.execute(
-            "INSERT INTO sessions (token, user_email) VALUES ($1, $2)",
+            "INSERT INTO sessions (token, user_email)
+            VALUES ($1, $2)",
             &[&token, &self.email],
         )?;
         Ok(UserToken(token))
@@ -124,7 +136,9 @@ impl User {
     /// Lista as sessões ativas do usuário
     pub fn list_sessions(&self, db: &mut postgres::Client) -> Result<Vec<UserSession>> {
         db.query(
-            "SELECT id, created, used FROM sessions WHERE user_email = $1",
+            "SELECT id, created, used
+            FROM sessions
+            WHERE user_email = $1",
             &[&self.email],
         )?
         .into_iter()
@@ -135,10 +149,15 @@ impl User {
     pub fn delete_session(&self, db: &mut postgres::Client, id: Option<i32>) -> Result<()> {
         match id {
             Some(id) => db.execute(
-                "DELETE FROM sessions WHERE user_email = $1 AND id = $2",
+                "DELETE FROM sessions
+                WHERE user_email = $1 AND id = $2",
                 &[&self.email, &id],
             )?,
-            None => db.execute("DELETE FROM sessions WHERE user_email = $1", &[&self.email])?,
+            None => db.execute(
+                "DELETE FROM sessions
+                WHERE user_email = $1",
+                &[&self.email],
+            )?,
         };
         Ok(())
     }
@@ -174,7 +193,8 @@ impl User {
         }
 
         db.execute(
-            "UPDATE users SET email = $1, password = $2, name = $3 WHERE email = $4",
+            "UPDATE users SET email = $1, password = $2, name = $3
+            WHERE email = $4",
             &[&user.email, &user.password, &user.name, &old_email],
         )
         .map_err(|e| {
@@ -192,7 +212,11 @@ impl User {
                 .description("Senha incorreta")
                 .build());
         }
-        db.execute("DELETE FROM users WHERE email = $1", &[&self.email])?;
+        db.execute(
+            "DELETE FROM users
+            WHERE email = $1",
+            &[&self.email],
+        )?;
         Ok(())
     }
     /// Utilizando os dados, registra um novo usuário
