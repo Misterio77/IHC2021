@@ -1,8 +1,9 @@
 use crate::schema::{User, UserSession, UserToken};
-use crate::{BodyResult, Database, Result};
+use crate::{BodyResult, Database, Error, Result};
 
 use rocket::response::status;
 use rocket::serde::json::Json;
+use rocket::http::Status;
 use rocket::{delete, get, post};
 use serde::Deserialize;
 
@@ -15,13 +16,15 @@ struct LoginRequest {
 #[post("/", data = "<body>")]
 async fn login(db: Database, body: BodyResult<'_, LoginRequest>) -> Result<Json<UserToken>> {
     let body = body?;
-    let token = db
-        .run(move |db| -> Result<UserToken> {
-            let user = User::from_credentials(db, &body.email, &body.password)?;
-            user.create_token(db)
-        })
-        .await?;
-    Ok(Json(token))
+    let email = body.email.clone();
+    let password = body.password.clone();
+    let user = db.run(move |db| User::from_email(db, &email)).await?;
+    if user.verify_password(&password) {
+        let token = db.run(move |db| user.create_token(db));
+        Ok(Json(token.await?))
+    } else {
+        Err(Error::builder().code(Status::Unauthorized).description("Senha incorreta").build())
+    }
 }
 
 #[get("/")]

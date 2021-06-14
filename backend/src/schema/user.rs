@@ -108,34 +108,6 @@ impl User {
         db.execute("UPDATE sessions SET used=now() WHERE id=$1", &[&session_id])?;
         row.try_into()
     }
-    /// Utilizando credenciais (email e senha), busca um usuário na database, verificando a senha
-    pub fn from_credentials(
-        db: &mut postgres::Client,
-        email: &str,
-        password: &str,
-    ) -> Result<Self> {
-        let user: User = db
-            .query_one(
-                "SELECT email, name, password, admin
-                FROM users
-                WHERE email = $1",
-                &[&email],
-            )
-            .map_err(|e| {
-                Error::builder_from(e)
-                    .code(Status::Unauthorized)
-                    .description("Esse usuário não está cadastrado")
-            })?
-            .try_into()?;
-        if user.verify_password(password) {
-            Ok(user)
-        } else {
-            Err(Error::builder()
-                .code(Status::Unauthorized)
-                .description("Senha incorreta")
-                .build())
-        }
-    }
     /// Cria um novo token para o usuário
     pub fn create_token(&self, db: &mut postgres::Client) -> Result<UserToken> {
         let token = thread_rng()
@@ -149,6 +121,17 @@ impl User {
             &[&token, &self.email],
         )?;
         Ok(UserToken(token))
+    }
+    /// Lista todos os usuários
+    pub fn list(db: &mut postgres::Client) -> Result<Vec<User>> {
+        db.query(
+            "SELECT email, name, password, admin
+            FROM users",
+            &[]
+        )?
+        .into_iter()
+        .map(User::try_from)
+        .collect()
     }
     /// Lista as sessões ativas do usuário
     pub fn list_sessions(&self, db: &mut postgres::Client) -> Result<Vec<UserSession>> {

@@ -7,6 +7,20 @@ use rocket::serde::json::Json;
 use rocket::{delete, get, post, put};
 use serde::Deserialize;
 
+#[get("/")]
+async fn list(db: Database, token: Result<UserToken>) -> Result<Json<Vec<User>>> {
+    let token = token?;
+    let requester = db.run(move |db| User::from_token(db, token)).await?;
+    if requester.admin {
+        let users = db.run(move |db| User::list(db)).await?;
+        Ok(Json(users))
+    } else {
+        Err(Error::builder()
+            .code(Status::Unauthorized)
+            .description("Você não tem permissão para listar os usuários")
+            .build())
+    }
+}
 #[get("/<email>")]
 async fn read(db: Database, token: Result<UserToken>, email: String) -> Result<Json<User>> {
     let token = token?;
@@ -112,5 +126,5 @@ async fn delete(
 }
 
 pub fn routes() -> Vec<rocket::Route> {
-    rocket::routes![read, create, update, delete]
+    rocket::routes![list, read, create, update, delete]
 }

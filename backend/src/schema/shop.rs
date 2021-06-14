@@ -107,7 +107,6 @@ impl Shop {
         )
         .map_err(|e| {
             Error::builder_from(e)
-                .code(Status::InternalServerError)
                 .description("Não foi possível atualizar informações")
         })?;
         Ok(shop)
