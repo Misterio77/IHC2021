@@ -169,19 +169,12 @@ impl User {
     pub fn modify(
         self,
         db: &mut postgres::Client,
-        current_password: &str,
         new_email: Option<&str>,
         new_password: Option<&str>,
         new_name: Option<&str>,
     ) -> Result<User> {
         let mut user = self;
         let old_email = user.email.clone();
-        if !user.verify_password(current_password) {
-            return Err(Error::builder()
-                .code(Status::Unauthorized)
-                .description("Senha incorreta")
-                .build());
-        }
         if let Some(new_email) = new_email {
             user.email = new_email.into();
         }
@@ -205,13 +198,7 @@ impl User {
         Ok(user)
     }
     /// Remove o usuário (requer confirmação da senha)
-    pub fn delete(self, db: &mut postgres::Client, current_password: &str) -> Result<()> {
-        if !self.verify_password(current_password) {
-            return Err(Error::builder()
-                .code(Status::Unauthorized)
-                .description("Senha incorreta")
-                .build());
-        }
+    pub fn delete(self, db: &mut postgres::Client) -> Result<()> {
         db.execute(
             "DELETE FROM users
             WHERE email = $1",
@@ -234,7 +221,7 @@ impl User {
         };
         // Guardar na database
         db.execute(
-            "INSERT INTO users VALUES ($1, $2, $3)",
+            "INSERT INTO users (email, password, name) VALUES ($1, $2, $3)",
             &[&user.email, &user.password, &user.name],
         )
         .map_err(|e| {

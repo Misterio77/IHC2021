@@ -6,6 +6,7 @@ async fn main() -> Result<()> {
         .attach(Database::fairing())
         .mount("/sessions", routes::sessions::routes())
         .mount("/users", routes::users::routes())
+        .mount("/shops", routes::shops::routes())
         .launch()
         .await?;
     Ok(())

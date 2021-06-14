@@ -48,7 +48,6 @@ async fn register(
 
 #[derive(Debug, Deserialize)]
 struct UpdateRequest {
-    current_password: String,
     email: Option<String>,
     password: Option<String>,
     name: Option<String>,
@@ -72,7 +71,6 @@ async fn update(
             }
             user.modify(
                 db,
-                &body.current_password,
                 body.email.as_deref(),
                 body.password.as_deref(),
                 body.name.as_deref(),
@@ -82,18 +80,12 @@ async fn update(
     Ok(Json(user))
 }
 
-#[derive(Debug, Deserialize)]
-struct DeleteRequest {
-    password: String,
-}
-#[delete("/<email>", data = "<body>")]
+#[delete("/<email>")]
 async fn delete(
     db: Database,
     token: Result<UserToken>,
-    body: BodyResult<'_, DeleteRequest>,
     email: String,
 ) -> Result<status::NoContent> {
-    let body = body?;
     db.run(move |db| -> Result<()> {
         let user = User::from_token(db, token?)?;
         if email != user.email {
@@ -102,7 +94,7 @@ async fn delete(
                 .description("Você não tem permissão para remover esse usuário")
                 .build());
         }
-        user.delete(db, &body.password)
+        user.delete(db)
     })
     .await?;
     Ok(status::NoContent)
