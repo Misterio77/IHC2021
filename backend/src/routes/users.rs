@@ -1,5 +1,6 @@
 use crate::schema::{User, UserToken};
 use crate::{BodyResult, Database, Error, Result};
+use futures::try_join;
 use rocket::http::Status;
 use rocket::response::status;
 use rocket::serde::json::Json;
@@ -7,12 +8,14 @@ use rocket::{delete, get, post, put};
 use serde::Deserialize;
 
 #[get("/<email>")]
-async fn user(db: Database, token: Result<UserToken>, email: String) -> Result<Json<User>> {
-    let user = db
-        .run(move |db| -> Result<User> { User::from_token(db, token?) })
-        .await?;
-    if email == user.email {
-        Ok(Json(user))
+async fn read(db: Database, token: Result<UserToken>, email: String) -> Result<Json<User>> {
+    let token = token?;
+    let requester = db.run(move |db| User::from_token(db, token));
+    let target = db.run(move |db| User::from_email(db, &email));
+
+    let (requester, target) = try_join!(requester, target)?;
+    if requester.email == target.email || requester.admin {
+        Ok(Json(target))
     } else {
         Err(Error::builder()
             .code(Status::Unauthorized)
@@ -29,15 +32,13 @@ struct RegisterRequest {
 }
 
 #[post("/", data = "<body>")]
-async fn register(
+async fn create(
     db: Database,
     body: BodyResult<'_, RegisterRequest>,
 ) -> Result<status::Created<Json<User>>> {
     let body = body?;
     let user = db
-        .run(move |db| -> Result<User> {
-            User::register(db, &body.email, &body.password, &body.name)
-        })
+        .run(move |db| User::register(db, &body.email, &body.password, &body.name))
         .await?;
     Ok(status::Created::new(format!(
         "https://cincobola.misterio.me/users/{}",
@@ -51,6 +52,7 @@ struct UpdateRequest {
     email: Option<String>,
     password: Option<String>,
     name: Option<String>,
+    admin: Option<bool>,
 }
 #[put("/<email>", data = "<body>")]
 async fn update(
@@ -60,24 +62,30 @@ async fn update(
     email: String,
 ) -> Result<Json<User>> {
     let body = body?;
-    let user = db
-        .run(move |db| -> Result<User> {
-            let user = User::from_token(db, token?)?;
-            if email != user.email {
-                return Err(Error::builder()
-                    .code(Status::Unauthorized)
-                    .description("Você não tem permissão para modificar esse usuário")
-                    .build());
-            }
-            user.modify(
+    let token = token?;
+    let requester = db.run(move |db| User::from_token(db, token));
+    let target = db.run(move |db| User::from_email(db, &email));
+
+    let (requester, target) = try_join!(requester, target)?;
+    // Apenas um administrador ou o próprio usuário podem mudar as informações
+    if target.email == requester.email || requester.admin {
+        let admin = body.admin.map(|request| request && requester.admin);
+        let user = db.run(move |db| {
+            target.modify(
                 db,
                 body.email.as_deref(),
                 body.password.as_deref(),
                 body.name.as_deref(),
+                admin,
             )
-        })
-        .await?;
-    Ok(Json(user))
+        });
+        Ok(Json(user.await?))
+    } else {
+        Err(Error::builder()
+            .code(Status::Unauthorized)
+            .description("Você não tem permissão para modificar esse usuário")
+            .build())
+    }
 }
 
 #[delete("/<email>")]
@@ -86,20 +94,23 @@ async fn delete(
     token: Result<UserToken>,
     email: String,
 ) -> Result<status::NoContent> {
-    db.run(move |db| -> Result<()> {
-        let user = User::from_token(db, token?)?;
-        if email != user.email {
-            return Err(Error::builder()
-                .code(Status::Unauthorized)
-                .description("Você não tem permissão para remover esse usuário")
-                .build());
-        }
-        user.delete(db)
-    })
-    .await?;
-    Ok(status::NoContent)
+    let token = token?;
+    let requester = db.run(move |db| User::from_token(db, token));
+    let target = db.run(move |db| User::from_email(db, &email));
+
+    let (requester, target) = try_join!(requester, target)?;
+    // Apenas um administrador ou o próprio usuário podem mudar as informações
+    if target.email == requester.email || requester.admin {
+        db.run(move |db| target.delete(db)).await?;
+        Ok(status::NoContent)
+    } else {
+        Err(Error::builder()
+            .code(Status::Unauthorized)
+            .description("Você não tem permissão para remover esse usuário")
+            .build())
+    }
 }
 
 pub fn routes() -> Vec<rocket::Route> {
-    rocket::routes![user, register, update, delete]
+    rocket::routes![read, create, update, delete]
 }

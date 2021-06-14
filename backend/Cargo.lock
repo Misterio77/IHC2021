@@ -163,6 +163,7 @@ name = "cincobola-backend"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "futures",
  "postgres",
  "rand 0.7.3",
  "rocket",

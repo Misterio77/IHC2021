@@ -1,9 +1,12 @@
+use crate::schema::Shop;
 use crate::{Error, Result};
+
 use postgres::Row;
 use rust_decimal::Decimal;
 use std::convert::TryFrom;
+use serde::Serialize;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct Product {
     pub slug: String,
     pub shop_slug: String,

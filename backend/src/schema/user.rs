@@ -55,6 +55,7 @@ impl TryFrom<Row> for UserSession {
 pub struct User {
     pub email: String,
     pub name: String,
+    pub admin: bool,
     #[serde(skip_serializing)]
     pub password: String,
 }
@@ -65,17 +66,33 @@ impl TryFrom<Row> for User {
         Ok(Self {
             email: row.try_get("email")?,
             name: row.try_get("name")?,
+            admin: row.try_get("admin")?,
             password: row.try_get("password")?,
         })
     }
 }
 
 impl User {
+    pub fn from_email(db: &mut postgres::Client, email: &str) -> Result<User> {
+        let row = db
+            .query_one(
+                "SELECT email, name, password, admin
+                FROM users
+                WHERE email = $1",
+                &[&email],
+            )
+            .map_err(|e| {
+                Error::builder_from(e)
+                    .code(Status::NotFound)
+                    .description("Usuário não encontrado")
+            })?;
+        row.try_into()
+    }
     /// Dado token, busca um usuário na db
     pub fn from_token(db: &mut postgres::Client, token: UserToken) -> Result<User> {
         let row = db
             .query_one(
-                "SELECT email, name, password, sessions.id AS session_id
+                "SELECT email, name, password, admin, sessions.id AS session_id
                 FROM users
                 INNER JOIN sessions
                 ON sessions.user_email = users.email
@@ -99,7 +116,7 @@ impl User {
     ) -> Result<Self> {
         let user: User = db
             .query_one(
-                "SELECT email, name, password
+                "SELECT email, name, password, admin
                 FROM users
                 WHERE email = $1",
                 &[&email],
@@ -165,13 +182,14 @@ impl User {
     pub fn verify_password(&self, password: &str) -> bool {
         argon2::verify_encoded(&self.password, password.as_bytes()).unwrap_or(false)
     }
-    /// Modifica informações (requer confirmação da senha)
+    /// Modifica informações
     pub fn modify(
         self,
         db: &mut postgres::Client,
         new_email: Option<&str>,
         new_password: Option<&str>,
         new_name: Option<&str>,
+        new_admin: Option<bool>,
     ) -> Result<User> {
         let mut user = self;
         let old_email = user.email.clone();
@@ -184,11 +202,20 @@ impl User {
         if let Some(new_name) = new_name {
             user.name = new_name.into();
         }
+        if let Some(new_admin) = new_admin {
+            user.admin = new_admin;
+        }
 
         db.execute(
-            "UPDATE users SET email = $1, password = $2, name = $3
-            WHERE email = $4",
-            &[&user.email, &user.password, &user.name, &old_email],
+            "UPDATE users SET email = $1, password = $2, name = $3, admin = $4
+            WHERE email = $5",
+            &[
+                &user.email,
+                &user.password,
+                &user.name,
+                &user.admin,
+                &old_email,
+            ],
         )
         .map_err(|e| {
             Error::builder_from(e)
@@ -218,11 +245,12 @@ impl User {
             email: email.into(),
             password: hash_password(password)?,
             name: name.into(),
+            admin: false,
         };
         // Guardar na database
         db.execute(
-            "INSERT INTO users (email, password, name) VALUES ($1, $2, $3)",
-            &[&user.email, &user.password, &user.name],
+            "INSERT INTO users (email, password, name, admin) VALUES ($1, $2, $3, $4)",
+            &[&user.email, &user.password, &user.name, &user.admin],
         )
         .map_err(|e| {
             // Caso não dê, já existe um registro com esse email (PK) lá

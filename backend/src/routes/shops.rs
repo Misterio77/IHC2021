@@ -1,5 +1,6 @@
 use crate::schema::{Shop, User, UserToken};
 use crate::{BodyResult, Database, Error, Result};
+use futures::try_join;
 use rocket::http::Status;
 use rocket::response::status;
 use rocket::serde::json::Json;
@@ -12,19 +13,21 @@ async fn list_by_owner(
     owner: String,
     token: Result<UserToken>,
 ) -> Result<Json<Vec<Shop>>> {
-    let shops = db
-        .run(move |db| -> Result<Vec<Shop>> {
-            let user = User::from_token(db, token?)?;
-            if owner != user.email {
-                return Err(Error::builder()
-                    .code(Status::Unauthorized)
-                    .description("Você não tem permissão para listar as lojas desse usuário")
-                    .build());
-            }
-            Shop::from_user(db, &user)
-        })
-        .await?;
-    Ok(Json(shops))
+    let token = token?;
+    let requester = db.run(move |db| User::from_token(db, token));
+    let target = db.run(move |db| User::from_email(db, &owner));
+
+    let (requester, target) = try_join!(requester, target)?;
+
+    if requester.email == target.email || requester.admin {
+        let shops = db.run(move |db| Shop::from_user(db, &target));
+        Ok(Json(shops.await?))
+    } else {
+        Err(Error::builder()
+            .code(Status::Unauthorized)
+            .description("Você não tem permissão para listar as lojas desse usuário")
+            .build())
+    }
 }
 
 #[get("/")]
@@ -57,12 +60,10 @@ async fn create(
     body: BodyResult<'_, CreateRequest>,
 ) -> Result<status::Created<Json<Shop>>> {
     let body = body?;
+    let token = token?;
+    let requester = db.run(move |db| User::from_token(db, token)).await?;
     let shop = db
-        .run(move |db| -> Result<Shop> {
-            let user = User::from_token(db, token?)?;
-            let color = body.color.replace("#", "");
-            Shop::create(&user, db, &body.slug, &body.name, &color)
-        })
+        .run(move |db| Shop::create(db, &body.slug, &body.name, &body.color, &requester.email))
         .await?;
     Ok(
         status::Created::new(format!("https://cincobola.misterio.me/shops/{}", shop.slug))
@@ -86,36 +87,47 @@ async fn update(
     body: BodyResult<'_, UpdateRequest>,
 ) -> Result<Json<Shop>> {
     let body = body?;
-    let shop = db
-        .run(move |db| -> Result<Shop> {
-            let user = User::from_token(db, token?)?;
-            let shop = Shop::from_slug(db, &slug)?;
-            let color = body.color.clone().map(|c| c.replace("#", ""));
+    let token = token?;
+    let requester = db.run(move |db| User::from_token(db, token));
+    let shop = db.run(move |db| Shop::from_slug(db, &slug));
+    let color = body.color.clone().map(|c| c.replace("#", ""));
+    let (shop, requester) = try_join!(shop, requester)?;
+
+    if requester.email == shop.owner_email || requester.admin {
+        let shop = db.run(move |db| {
             shop.modify(
                 db,
-                &user,
                 body.slug.as_deref(),
                 body.name.as_deref(),
                 color.as_deref(),
                 body.owner.as_deref(),
             )
-        })
-        .await?;
-    Ok(Json(shop))
+        });
+        Ok(Json(shop.await?))
+    } else {
+        Err(Error::builder()
+            .code(Status::Unauthorized)
+            .description("Você não tem permissão para modificar essa loja")
+            .build())
+    }
 }
 
 #[delete("/<slug>")]
-async fn delete(
-    db: Database,
-    slug: String,
-    token: Result<UserToken>,
-) -> Result<status::NoContent> {
-    db.run(move |db| -> Result<()> {
-        let user = User::from_token(db, token?)?;
-        let shop = Shop::from_slug(db, &slug)?;
-        shop.delete(db, &user)
-    }).await?;
-    Ok(status::NoContent)
+async fn delete(db: Database, slug: String, token: Result<UserToken>) -> Result<status::NoContent> {
+    let token = token?;
+    let requester = db.run(move |db| User::from_token(db, token));
+    let shop = db.run(move |db| Shop::from_slug(db, &slug));
+    let (shop, requester) = try_join!(shop, requester)?;
+
+    if requester.email == shop.owner_email || requester.admin {
+        db.run(move |db| shop.delete(db)).await?;
+        Ok(status::NoContent)
+    } else {
+        Err(Error::builder()
+            .code(Status::Unauthorized)
+            .description("Você não tem permissão para remover essa loja")
+            .build())
+    }
 }
 
 pub fn routes() -> Vec<rocket::Route> {

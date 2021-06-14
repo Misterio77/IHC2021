@@ -63,24 +63,17 @@ impl Shop {
         .map(Shop::try_from)
         .collect()
     }
-    pub fn delete(self, db: &mut postgres::Client, user: &User) -> Result<()> {
-        if user.email != self.owner_email {
-            return Err(Error::builder()
-                .code(Status::Unauthorized)
-                .description("Você não tem permissão para remover essa loja")
-                .build());
-        }
+    pub fn delete(self, db: &mut postgres::Client) -> Result<()> {
         db.execute(
             "DELETE FROM shops
-            WHERE slug = $1 AND owner_email = $2",
-            &[&self.slug, &user.email],
+            WHERE slug = $1",
+            &[&self.slug],
         )?;
         Ok(())
     }
     pub fn modify(
         self,
         db: &mut postgres::Client,
-        user: &User,
         new_slug: Option<&str>,
         new_name: Option<&str>,
         new_color: Option<&str>,
@@ -88,12 +81,6 @@ impl Shop {
     ) -> Result<Shop> {
         let mut shop = self;
         let old_slug = shop.slug.clone();
-        if user.email != shop.owner_email {
-            return Err(Error::builder()
-                .code(Status::Unauthorized)
-                .description("Você não tem permissão para modificar essa loja")
-                .build());
-        }
         if let Some(new_slug) = new_slug {
             shop.slug = new_slug.into();
         }
@@ -126,20 +113,20 @@ impl Shop {
         Ok(shop)
     }
     pub fn create(
-        user: &User,
         db: &mut postgres::Client,
         slug: &str,
         name: &str,
         color: &str,
+        owner: &str,
     ) -> Result<Shop> {
         let shop = Shop {
             slug: slug.into(),
             name: name.into(),
             color: color.into(),
-            owner_email: user.email.clone(),
+            owner_email: owner.into(),
         };
         db.execute(
-            "INSERT INTO shops VALUES ($1, $2, $3, $4)",
+            "INSERT INTO shops (slug, name, color, owner_email) VALUES ($1, $2, $3, $4)",
             &[&shop.slug, &shop.name, &shop.color, &shop.owner_email],
         )
         .map_err(|e| {
