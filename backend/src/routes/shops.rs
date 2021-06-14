@@ -14,13 +14,13 @@ async fn list_by_owner(
     token: Result<UserToken>,
 ) -> Result<Json<Vec<Shop>>> {
     let token = token?;
-    let requester = db.run(move |db| User::from_token(db, token));
-    let target = db.run(move |db| User::from_email(db, &owner));
+    let requester = User::read_from_token(&db, &token);
+    let target = User::read(&db, &owner);
 
     let (requester, target) = try_join!(requester, target)?;
 
     if requester.email == target.email || requester.admin {
-        let shops = db.run(move |db| Shop::from_user(db, &target));
+        let shops = Shop::list_from_user(&db, &target);
         Ok(Json(shops.await?))
     } else {
         Err(Error::builder()
@@ -32,17 +32,13 @@ async fn list_by_owner(
 
 #[get("/")]
 async fn list(db: Database) -> Result<Json<Vec<Shop>>> {
-    let shops = db
-        .run(move |db| -> Result<Vec<Shop>> { Shop::list(db) })
-        .await?;
+    let shops = Shop::list(&db).await?;
     Ok(Json(shops))
 }
 
 #[get("/<slug>")]
 async fn read(db: Database, slug: String) -> Result<Json<Shop>> {
-    let shop = db
-        .run(move |db| -> Result<Shop> { Shop::from_slug(db, &slug) })
-        .await?;
+    let shop = Shop::read(&db, &slug).await?;
     Ok(Json(shop))
 }
 
@@ -59,12 +55,24 @@ async fn create(
     token: Result<UserToken>,
     body: BodyResult<'_, CreateRequest>,
 ) -> Result<status::Created<Json<Shop>>> {
-    let body = body?;
+    let body = body?.into_inner();
     let token = token?;
-    let requester = db.run(move |db| User::from_token(db, token)).await?;
-    let shop = db
-        .run(move |db| Shop::create(db, &body.slug, &body.name, &body.color, &requester.email))
-        .await?;
+    let requester = User::read_from_token(&db, &token).await?;
+    let shop = Shop {
+        slug: body.slug,
+        name: body.name,
+        color: body.color.replace("#", ""),
+        owner_email: requester.email,
+    };
+
+    if shop.color.len() > 6 {
+        return Err(Error::builder()
+            .code(Status::BadRequest)
+            .description("A cor da loja deve ser heximadecimal e ter, no máximo, 6 caracteres")
+            .build());
+    }
+
+    shop.create(&db).await?;
     Ok(
         status::Created::new(format!("https://cincobola.misterio.me/shops/{}", shop.slug))
             .body(Json(shop)),
@@ -86,24 +94,31 @@ async fn update(
     token: Result<UserToken>,
     body: BodyResult<'_, UpdateRequest>,
 ) -> Result<Json<Shop>> {
-    let body = body?;
+    let body = body?.into_inner();
     let token = token?;
-    let requester = db.run(move |db| User::from_token(db, token));
-    let shop = db.run(move |db| Shop::from_slug(db, &slug));
-    let color = body.color.clone().map(|c| c.replace("#", ""));
-    let (shop, requester) = try_join!(shop, requester)?;
+
+    let requester = User::read_from_token(&db, &token);
+    let shop = Shop::read(&db, &slug);
+
+    let (mut shop, requester) = try_join!(shop, requester)?;
+    let old_slug = shop.slug.clone();
 
     if requester.email == shop.owner_email || requester.admin {
-        let shop = db.run(move |db| {
-            shop.modify(
-                db,
-                body.slug.as_deref(),
-                body.name.as_deref(),
-                color.as_deref(),
-                body.owner.as_deref(),
-            )
-        });
-        Ok(Json(shop.await?))
+        if let Some(x) = body.slug {
+            shop.slug = x;
+        }
+        if let Some(x) = body.name {
+            shop.name = x;
+        }
+        if let Some(x) = body.color {
+            shop.color = x.replace("#", "");
+        }
+        if let Some(x) = body.owner {
+            shop.owner_email = x;
+        }
+
+        shop.update(&db, &old_slug).await?;
+        Ok(Json(shop))
     } else {
         Err(Error::builder()
             .code(Status::Unauthorized)
@@ -115,12 +130,12 @@ async fn update(
 #[delete("/<slug>")]
 async fn delete(db: Database, slug: String, token: Result<UserToken>) -> Result<status::NoContent> {
     let token = token?;
-    let requester = db.run(move |db| User::from_token(db, token));
-    let shop = db.run(move |db| Shop::from_slug(db, &slug));
+    let requester = User::read_from_token(&db, &token);
+    let shop = Shop::read(&db, &slug);
     let (shop, requester) = try_join!(shop, requester)?;
 
     if requester.email == shop.owner_email || requester.admin {
-        db.run(move |db| shop.delete(db)).await?;
+        shop.delete(&db).await?;
         Ok(status::NoContent)
     } else {
         Err(Error::builder()

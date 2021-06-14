@@ -4,7 +4,7 @@ use cincobola_backend::{routes, Database, Result};
 async fn main() -> Result<()> {
     rocket::build()
         .attach(Database::fairing())
-        .mount("/sessions", routes::sessions::routes())
+        .mount("/session", routes::session::routes())
         .mount("/users", routes::users::routes())
         .mount("/shops", routes::shops::routes())
         .launch()

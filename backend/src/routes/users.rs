@@ -10,9 +10,9 @@ use serde::Deserialize;
 #[get("/")]
 async fn list(db: Database, token: Result<UserToken>) -> Result<Json<Vec<User>>> {
     let token = token?;
-    let requester = db.run(move |db| User::from_token(db, token)).await?;
+    let requester = User::read_from_token(&db, &token).await?;
     if requester.admin {
-        let users = db.run(move |db| User::list(db)).await?;
+        let users = User::list(&db).await?;
         Ok(Json(users))
     } else {
         Err(Error::builder()
@@ -24,8 +24,8 @@ async fn list(db: Database, token: Result<UserToken>) -> Result<Json<Vec<User>>>
 #[get("/<email>")]
 async fn read(db: Database, token: Result<UserToken>, email: String) -> Result<Json<User>> {
     let token = token?;
-    let requester = db.run(move |db| User::from_token(db, token));
-    let target = db.run(move |db| User::from_email(db, &email));
+    let requester = User::read_from_token(&db, &token);
+    let target = User::read(&db, &email);
 
     let (requester, target) = try_join!(requester, target)?;
     if requester.email == target.email || requester.admin {
@@ -50,10 +50,17 @@ async fn create(
     db: Database,
     body: BodyResult<'_, RegisterRequest>,
 ) -> Result<status::Created<Json<User>>> {
-    let body = body?;
-    let user = db
-        .run(move |db| User::register(db, &body.email, &body.password, &body.name))
-        .await?;
+    let body = body?.into_inner();
+    let user = User {
+        email: body.email,
+        password: User::hash_password(&body.password)?,
+        name: body.name,
+        token: Some(User::generate_token()?),
+        admin: false,
+    };
+
+    user.create(&db).await?;
+
     Ok(status::Created::new(format!(
         "https://cincobola.misterio.me/users/{}",
         user.email
@@ -75,25 +82,30 @@ async fn update(
     body: BodyResult<'_, UpdateRequest>,
     email: String,
 ) -> Result<Json<User>> {
-    let body = body?;
+    let body = body?.into_inner();
     let token = token?;
-    let requester = db.run(move |db| User::from_token(db, token));
-    let target = db.run(move |db| User::from_email(db, &email));
+    let requester = User::read_from_token(&db, &token);
+    let target = User::read(&db, &email);
 
-    let (requester, target) = try_join!(requester, target)?;
+    let (requester, mut target) = try_join!(requester, target)?;
+    let old_email = target.email.clone();
+
     // Apenas um administrador ou o próprio usuário podem mudar as informações
     if target.email == requester.email || requester.admin {
-        let admin = body.admin.map(|request| request && requester.admin);
-        let user = db.run(move |db| {
-            target.modify(
-                db,
-                body.email.as_deref(),
-                body.password.as_deref(),
-                body.name.as_deref(),
-                admin,
-            )
-        });
-        Ok(Json(user.await?))
+        if let Some(x) = body.email {
+            target.email = x;
+        }
+        if let Some(x) = body.password {
+            target.password = User::hash_password(&x)?;
+        }
+        if let Some(x) = body.name {
+            target.name = x;
+        }
+        if let Some(x) = body.admin {
+            target.admin = x && requester.admin;
+        }
+        target.update(&db, &old_email).await?;
+        Ok(Json(target))
     } else {
         Err(Error::builder()
             .code(Status::Unauthorized)
@@ -109,13 +121,13 @@ async fn delete(
     email: String,
 ) -> Result<status::NoContent> {
     let token = token?;
-    let requester = db.run(move |db| User::from_token(db, token));
-    let target = db.run(move |db| User::from_email(db, &email));
+    let requester = User::read_from_token(&db, &token);
+    let target = User::read(&db, &email);
 
     let (requester, target) = try_join!(requester, target)?;
-    // Apenas um administrador ou o próprio usuário podem mudar as informações
+    // Apenas um administrador ou o próprio usuário podem apagar
     if target.email == requester.email || requester.admin {
-        db.run(move |db| target.delete(db)).await?;
+        target.delete(&db).await?;
         Ok(status::NoContent)
     } else {
         Err(Error::builder()

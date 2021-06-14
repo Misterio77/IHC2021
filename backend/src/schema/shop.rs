@@ -1,12 +1,12 @@
 use crate::schema::User;
-use crate::{Error, Result};
+use crate::{Database, Error, Result};
 
 use postgres::Row;
 use rocket::http::Status;
 use serde::Serialize;
 use std::convert::{TryFrom, TryInto};
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct Shop {
     pub slug: String,
     pub name: String,
@@ -28,111 +28,100 @@ impl TryFrom<Row> for Shop {
 }
 
 impl Shop {
-    pub fn list(db: &mut postgres::Client) -> Result<Vec<Shop>> {
-        db.query(
-            "SELECT slug, name, color, owner_email
-            FROM shops",
-            &[],
-        )?
+    pub async fn list(db: &Database) -> Result<Vec<Shop>> {
+        db.run(move |db| {
+            db.query(
+                "SELECT *
+                FROM shops",
+                &[],
+            )
+        })
+        .await?
         .into_iter()
         .map(Shop::try_from)
         .collect()
     }
-    pub fn from_slug(db: &mut postgres::Client, slug: &str) -> Result<Shop> {
-        db.query_one(
-            "SELECT slug, name, color, owner_email
-            FROM shops
-            WHERE slug = $1",
-            &[&slug],
-        )
-        .map_err(|e| {
-            Error::builder_from(e)
-                .code(Status::NotFound)
-                .description("Loja não encontrada")
-        })?
+    pub async fn read(db: &Database, slug: &str) -> Result<Shop> {
+        let slug: String = slug.into();
+        db.run(move |db| {
+            db.query_one(
+                "SELECT *
+                FROM shops
+                WHERE slug = $1",
+                &[&slug],
+            )
+            .map_err(|e| {
+                Error::builder_from(e)
+                    .code(Status::NotFound)
+                    .description("Loja não encontrada")
+            })
+        })
+        .await?
         .try_into()
     }
-    pub fn from_user(db: &mut postgres::Client, user: &User) -> Result<Vec<Shop>> {
-        db.query(
-            "SELECT slug, name, color, owner_email
-            FROM shops
-            WHERE owner_email = $1",
-            &[&user.email],
-        )?
+    pub async fn list_from_user(db: &Database, user: &User) -> Result<Vec<Shop>> {
+        let user = user.clone();
+        db.run(move |db| {
+            db.query(
+                "SELECT *
+                FROM shops
+                WHERE owner_email = $1",
+                &[&user.email],
+            )
+        })
+        .await?
         .into_iter()
         .map(Shop::try_from)
         .collect()
     }
-    pub fn delete(self, db: &mut postgres::Client) -> Result<()> {
-        db.execute(
-            "DELETE FROM shops
-            WHERE slug = $1",
-            &[&self.slug],
-        )?;
+    pub async fn delete(&self, db: &Database) -> Result<()> {
+        let shop = self.clone();
+        db.run(move |db| {
+            db.execute(
+                "DELETE FROM shops
+                WHERE slug = $1",
+                &[&shop.slug],
+            )
+        })
+        .await?;
         Ok(())
     }
-    pub fn modify(
-        self,
-        db: &mut postgres::Client,
-        new_slug: Option<&str>,
-        new_name: Option<&str>,
-        new_color: Option<&str>,
-        new_owner_email: Option<&str>,
-    ) -> Result<Shop> {
-        let mut shop = self;
-        let old_slug = shop.slug.clone();
-        if let Some(new_slug) = new_slug {
-            shop.slug = new_slug.into();
-        }
-        if let Some(new_name) = new_name {
-            shop.name = new_name.into();
-        }
-        if let Some(new_color) = new_color {
-            shop.color = new_color.into();
-        }
-        if let Some(new_owner_email) = new_owner_email {
-            shop.owner_email = new_owner_email.into();
-        }
-
-        db.execute(
-            "UPDATE shops SET slug = $1, name = $2, color = $3, owner_email = $4
-            WHERE slug = $5",
-            &[
-                &shop.slug,
-                &shop.name,
-                &shop.color,
-                &shop.owner_email,
-                &old_slug,
-            ],
-        )
-        .map_err(|e| {
-            Error::builder_from(e)
-                .description("Não foi possível atualizar informações")
-        })?;
-        Ok(shop)
+    pub async fn update(&self, db: &Database, old_slug: &str) -> Result<()> {
+        let old_slug: String = old_slug.into();
+        let shop = self.clone();
+        db.run(move |db| {
+            db.execute(
+                "UPDATE shops SET slug = $1, name = $2, color = $3, owner_email = $4
+                WHERE slug = $5",
+                &[
+                    &shop.slug,
+                    &shop.name,
+                    &shop.color,
+                    &shop.owner_email,
+                    &old_slug,
+                ],
+            )
+            .map_err(|e| {
+                Error::builder_from(e).description("Não foi possível atualizar informações")
+            })
+        })
+        .await?;
+        Ok(())
     }
-    pub fn create(
-        db: &mut postgres::Client,
-        slug: &str,
-        name: &str,
-        color: &str,
-        owner: &str,
-    ) -> Result<Shop> {
-        let shop = Shop {
-            slug: slug.into(),
-            name: name.into(),
-            color: color.into(),
-            owner_email: owner.into(),
-        };
-        db.execute(
-            "INSERT INTO shops (slug, name, color, owner_email) VALUES ($1, $2, $3, $4)",
-            &[&shop.slug, &shop.name, &shop.color, &shop.owner_email],
-        )
-        .map_err(|e| {
-            Error::builder_from(e)
-                .code(Status::BadRequest)
-                .description("Uma loja com esse identificador já existe")
-        })?;
-        Ok(shop)
+    pub async fn create(&self, db: &Database) -> Result<()> {
+        let shop = self.clone();
+        db.run(move |db| {
+            db.execute(
+                "INSERT INTO shops (slug, name, color, owner_email) VALUES ($1, $2, $3, $4)",
+                &[&shop.slug, &shop.name, &shop.color, &shop.owner_email],
+            )
+            .map_err(|e| {
+                Error::builder_from(e)
+                    .code(Status::BadRequest)
+                    .description("Uma loja com esse identificador já existe")
+            })
+        })
+        .await?;
+        Ok(())
     }
 }

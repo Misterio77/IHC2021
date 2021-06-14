@@ -2,9 +2,10 @@ use crate::schema::Shop;
 use crate::{Error, Result};
 
 use postgres::Row;
+use rocket::http::Status;
 use rust_decimal::Decimal;
-use std::convert::TryFrom;
 use serde::Serialize;
+use std::convert::{TryFrom, TryInto};
 
 #[derive(Debug, Serialize)]
 pub struct Product {
@@ -35,9 +36,23 @@ impl TryFrom<Row> for Product {
 }
 
 impl Product {
+    pub fn read(db: &mut postgres::Client, slug: &str) -> Result<Product> {
+        db.query_one(
+            "SELECT *
+            FROM products
+            WHERE slug = $1",
+            &[&slug],
+        )
+        .map_err(|e| {
+            Error::builder_from(e)
+                .code(Status::NotFound)
+                .description("Produto não encontrado")
+        })?
+        .try_into()
+    }
     pub fn list(db: &mut postgres::Client) -> Result<Vec<Product>> {
         db.query(
-            "SELECT slug, shop_slug, name, price, available, sold, details, picture
+            "SELECT *
             FROM products",
             &[],
         )?
@@ -45,9 +60,9 @@ impl Product {
         .map(Product::try_from)
         .collect()
     }
-    pub fn from_shop(db: &mut postgres::Client, shop: &Shop) -> Result<Vec<Product>> {
+    pub fn list_from_shop(db: &mut postgres::Client, shop: &Shop) -> Result<Vec<Product>> {
         db.query(
-            "SELECT slug, shop_slug, name, price, available, sold, details, picture
+            "SELECT *
             FROM products
             WHERE shop_slug = $1",
             &[&shop.slug],
@@ -56,7 +71,7 @@ impl Product {
         .map(Product::try_from)
         .collect()
     }
-    pub fn delete(self, db: &mut postgres::Client) -> Result<()> {
+    pub fn delete(&self, db: &mut postgres::Client) -> Result<()> {
         db.execute(
             "DELETE FROM products
             WHERE slug = $1",
@@ -64,56 +79,19 @@ impl Product {
         )?;
         Ok(())
     }
-    pub fn modify(
-        self,
-        db: &mut postgres::Client,
-        new_slug: Option<&str>,
-        new_shop_slug: Option<&str>,
-        new_name: Option<&str>,
-        new_price: Option<&Decimal>,
-        new_available: Option<i32>,
-        new_sold: Option<i32>,
-        new_details: Option<&str>,
-        new_picture: Option<&str>,
-    ) -> Result<Product> {
-        let mut product = self;
-        let old_slug = product.slug.clone();
-        if let Some(x) = new_slug {
-            product.slug = x.into();
-        }
-        if let Some(x) = new_shop_slug {
-            product.shop_slug = x.into();
-        }
-        if let Some(x) = new_name {
-            product.name = x.into();
-        }
-        if let Some(x) = new_price {
-            product.price = x.clone();
-        }
-        if let Some(x) = new_available {
-            product.available = x;
-        }
-        if let Some(x) = new_sold {
-            product.sold = x;
-        }
-        if let Some(x) = new_details {
-            product.details = x.into();
-        }
-        if let Some(x) = new_picture {
-            product.picture = x.into();
-        }
+    pub fn update(&self, old_slug: &str, db: &mut postgres::Client) -> Result<()> {
         db.execute(
             "UPDATE products SET slug = $1, shop_slug = $2, name = $3, price = $4, available = $5, sold = $6, details = $7, picture = $8
             WHERE slug = $9",
             &[
-                &product.slug,
-                &product.shop_slug,
-                &product.name,
-                &product.price,
-                &product.available,
-                &product.sold,
-                &product.details,
-                &product.picture,
+                &self.slug,
+                &self.shop_slug,
+                &self.name,
+                &self.price,
+                &self.available,
+                &self.sold,
+                &self.details,
+                &self.picture,
                 &old_slug,
             ],
         )
@@ -121,6 +99,6 @@ impl Product {
             Error::builder_from(e)
                 .description("Não foi possível atualizar informações")
         })?;
-        Ok(product)
+        Ok(())
     }
 }
