@@ -40,29 +40,25 @@ CREATE TABLE public.products (
     shop_slug text NOT NULL,
     name text NOT NULL,
     price numeric NOT NULL,
-    available integer DEFAULT 0,
-    sold integer DEFAULT 0 NOT NULL,
-    details text,
-    picture text
+    available integer NOT NULL,
+    sold integer NOT NULL,
+    details text NOT NULL,
+    picture text NOT NULL
 );
 
 ALTER TABLE public.products OWNER TO misterio;
 
-COMMENT ON COLUMN public.products.available IS 'NULL means "unlimited"';
-
-CREATE SEQUENCE public.products_id_seq
-    AS integer START WITH 1
+CREATE SEQUENCE public.purchases_id_seq
+    START WITH 1
     INCREMENT BY 1
     NO MINVALUE
     NO MAXVALUE
     CACHE 1;
 
-ALTER TABLE public.products_id_seq OWNER TO misterio;
-
-ALTER SEQUENCE public.products_id_seq OWNED BY public.products.slug;
+ALTER TABLE public.purchases_id_seq OWNER TO misterio;
 
 CREATE TABLE public.purchases (
-    id integer NOT NULL,
+    id integer DEFAULT nextval('public.purchases_id_seq'::regclass) NOT NULL,
     product_slug text,
     amount integer NOT NULL,
     paid numeric NOT NULL,
@@ -76,31 +72,10 @@ COMMENT ON COLUMN public.purchases.product_slug IS 'Nullable to keep record even
 
 COMMENT ON COLUMN public.purchases.purchaser_email IS 'Nullable to keep record even if user is deleted';
 
-CREATE TABLE public.sessions (
-    id integer NOT NULL,
-    token text NOT NULL,
-    created timestamp with time zone DEFAULT now() NOT NULL,
-    user_email public.citext NOT NULL,
-    used timestamp with time zone
-);
-
-ALTER TABLE public.sessions OWNER TO misterio;
-
-CREATE SEQUENCE public.sessions_id_seq
-    AS integer START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1;
-
-ALTER TABLE public.sessions_id_seq OWNER TO misterio;
-
-ALTER SEQUENCE public.sessions_id_seq OWNED BY public.sessions.id;
-
 CREATE TABLE public.shops (
     slug text NOT NULL,
     name text NOT NULL,
-    color character varying(6),
+    color character varying(6) NOT NULL,
     owner_email public.citext NOT NULL
 );
 
@@ -111,7 +86,9 @@ COMMENT ON COLUMN public.shops.slug IS 'Shop slug name';
 CREATE TABLE public.users (
     email public.citext NOT NULL,
     password text NOT NULL,
-    name text NOT NULL
+    name text NOT NULL,
+    admin boolean NOT NULL,
+    token text DEFAULT 'NULL' ::text
 );
 
 ALTER TABLE public.users OWNER TO misterio;
@@ -119,22 +96,10 @@ ALTER TABLE public.users OWNER TO misterio;
 COMMENT ON COLUMN public.users.email IS 'User email';
 
 ALTER TABLE ONLY public.products
-    ALTER COLUMN slug SET DEFAULT nextval('public.products_id_seq'::regclass);
-
-ALTER TABLE ONLY public.sessions
-    ALTER COLUMN id SET DEFAULT nextval('public.sessions_id_seq'::regclass);
-
-ALTER TABLE ONLY public.products
     ADD CONSTRAINT products_pkey PRIMARY KEY (slug);
-
-ALTER TABLE ONLY public.sessions
-    ADD CONSTRAINT sessions_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.shops
     ADD CONSTRAINT shop_pkey PRIMARY KEY (slug);
-
-ALTER TABLE ONLY public.sessions
-    ADD CONSTRAINT unique_token UNIQUE (token);
 
 ALTER TABLE ONLY public.users
     ADD CONSTRAINT users_pkey PRIMARY KEY (email);
@@ -147,9 +112,6 @@ ALTER TABLE ONLY public.purchases
 
 ALTER TABLE ONLY public.purchases
     ADD CONSTRAINT sales_purchaser_email_fkey FOREIGN KEY (purchaser_email) REFERENCES public.users (email) ON UPDATE CASCADE ON DELETE SET NULL;
-
-ALTER TABLE ONLY public.sessions
-    ADD CONSTRAINT sessions_user_email_fkey FOREIGN KEY (user_email) REFERENCES public.users (email) ON UPDATE CASCADE ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.shops
     ADD CONSTRAINT shops_owner_email_fkey FOREIGN KEY (owner_email) REFERENCES public.users (email) ON UPDATE CASCADE ON DELETE CASCADE;
