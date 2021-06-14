@@ -19,15 +19,15 @@ async fn list_by_owner(
 
     let (requester, target) = try_join!(requester, target)?;
 
-    if requester.email == target.email || requester.admin {
-        let shops = Shop::list_from_user(&db, &target);
-        Ok(Json(shops.await?))
-    } else {
-        Err(Error::builder()
-            .code(Status::Unauthorized)
+    if requester.email != target.email && !requester.admin {
+        return Err(Error::builder()
+            .code(Status::Forbidden)
             .description("Você não tem permissão para listar as lojas desse usuário")
-            .build())
+            .build());
     }
+
+    let shops = Shop::list_from_user(&db, &target);
+    Ok(Json(shops.await?))
 }
 
 #[get("/")]
@@ -47,6 +47,7 @@ struct CreateRequest {
     slug: String,
     name: String,
     color: String,
+    owner_email: String,
 }
 
 #[post("/", data = "<body>")]
@@ -62,13 +63,21 @@ async fn create(
         slug: body.slug,
         name: body.name,
         color: body.color.replace("#", ""),
-        owner_email: requester.email,
+        owner_email: body.owner_email,
     };
 
     if shop.color.len() > 6 {
         return Err(Error::builder()
             .code(Status::BadRequest)
             .description("A cor da loja deve ser heximadecimal e ter, no máximo, 6 caracteres")
+            .build());
+    }
+
+    // Retornar erro caso o usuário esteja criando uma loja em um nome que não o dele
+    if requester.email != shop.owner_email && !requester.admin {
+        return Err(Error::builder()
+            .code(Status::Forbidden)
+            .description("Você não tem permissão para criar uma loja em nome de outra pessoa")
             .build());
     }
 
@@ -84,7 +93,7 @@ struct UpdateRequest {
     slug: Option<String>,
     name: Option<String>,
     color: Option<String>,
-    owner: Option<String>,
+    owner_email: Option<String>,
 }
 
 #[put("/<slug>", data = "<body>")]
@@ -103,28 +112,38 @@ async fn update(
     let (mut shop, requester) = try_join!(shop, requester)?;
     let old_slug = shop.slug.clone();
 
-    if requester.email == shop.owner_email || requester.admin {
-        if let Some(x) = body.slug {
-            shop.slug = x;
-        }
-        if let Some(x) = body.name {
-            shop.name = x;
-        }
-        if let Some(x) = body.color {
-            shop.color = x.replace("#", "");
-        }
-        if let Some(x) = body.owner {
-            shop.owner_email = x;
-        }
-
-        shop.update(&db, &old_slug).await?;
-        Ok(Json(shop))
-    } else {
-        Err(Error::builder()
-            .code(Status::Unauthorized)
+    // Retornar erro caso o usuário esteja alterando uma loja que não é dele
+    if requester.email != shop.owner_email && !requester.admin {
+        return Err(Error::builder()
+            .code(Status::Forbidden)
             .description("Você não tem permissão para modificar essa loja")
-            .build())
+            .build());
     }
+
+    // Adicionar campos
+    if let Some(x) = body.slug {
+        shop.slug = x;
+    }
+    if let Some(x) = body.name {
+        shop.name = x;
+    }
+    if let Some(x) = body.color {
+        shop.color = x.replace("#", "");
+    }
+    if let Some(x) = body.owner_email {
+        shop.owner_email = x;
+    }
+
+    // Retornar erro caso o usuário esteja trocando posse da loja
+    if requester.email != shop.owner_email && !requester.admin {
+        return Err(Error::builder()
+            .code(Status::Forbidden)
+            .description("Você não tem permissão para trocar o dono de uma loja")
+            .build());
+    }
+
+    shop.update(&db, &old_slug).await?;
+    Ok(Json(shop))
 }
 
 #[delete("/<slug>")]
@@ -134,15 +153,14 @@ async fn delete(db: Database, slug: String, token: Result<UserToken>) -> Result<
     let shop = Shop::read(&db, &slug);
     let (shop, requester) = try_join!(shop, requester)?;
 
-    if requester.email == shop.owner_email || requester.admin {
-        shop.delete(&db).await?;
-        Ok(status::NoContent)
-    } else {
-        Err(Error::builder()
-            .code(Status::Unauthorized)
+    if requester.email != shop.owner_email && !requester.admin {
+        return Err(Error::builder()
+            .code(Status::Forbidden)
             .description("Você não tem permissão para remover essa loja")
-            .build())
+            .build());
     }
+    shop.delete(&db).await?;
+    Ok(status::NoContent)
 }
 
 pub fn routes() -> Vec<rocket::Route> {

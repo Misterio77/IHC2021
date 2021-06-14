@@ -7,6 +7,7 @@ async fn main() -> Result<()> {
         .mount("/session", routes::session::routes())
         .mount("/users", routes::users::routes())
         .mount("/shops", routes::shops::routes())
+        .mount("/products", routes::products::routes())
         .launch()
         .await?;
     Ok(())

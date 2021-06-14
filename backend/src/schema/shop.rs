@@ -6,7 +6,7 @@ use rocket::http::Status;
 use serde::Serialize;
 use std::convert::{TryFrom, TryInto};
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(PartialEq, Eq, Debug, Clone, Serialize)]
 pub struct Shop {
     pub slug: String,
     pub name: String,

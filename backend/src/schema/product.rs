@@ -1,5 +1,5 @@
 use crate::schema::Shop;
-use crate::{Error, Result};
+use crate::{Database, Error, Result};
 
 use postgres::Row;
 use rocket::http::Status;
@@ -7,7 +7,7 @@ use rust_decimal::Decimal;
 use serde::Serialize;
 use std::convert::{TryFrom, TryInto};
 
-#[derive(Debug, Serialize)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
 pub struct Product {
     pub slug: String,
     pub shop_slug: String,
@@ -36,69 +36,123 @@ impl TryFrom<Row> for Product {
 }
 
 impl Product {
-    pub fn read(db: &mut postgres::Client, slug: &str) -> Result<Product> {
-        db.query_one(
-            "SELECT *
-            FROM products
-            WHERE slug = $1",
-            &[&slug],
-        )
-        .map_err(|e| {
-            Error::builder_from(e)
-                .code(Status::NotFound)
-                .description("Produto não encontrado")
-        })?
+    pub async fn read(db: &Database, slug: &str) -> Result<Product> {
+        let slug: String = slug.into();
+        db.run(move |db| {
+            db.query_one(
+                "SELECT *
+                FROM products
+                WHERE slug = $1",
+                &[&slug],
+            )
+            .map_err(|e| {
+                Error::builder_from(e)
+                    .code(Status::NotFound)
+                    .description("Produto não encontrado")
+            })
+        })
+        .await?
         .try_into()
     }
-    pub fn list(db: &mut postgres::Client) -> Result<Vec<Product>> {
-        db.query(
-            "SELECT *
-            FROM products",
-            &[],
-        )?
+    pub async fn list(db: &Database) -> Result<Vec<Product>> {
+        db.run(move |db| {
+            db.query(
+                "SELECT *
+                FROM products",
+                &[],
+            )
+        })
+        .await?
         .into_iter()
         .map(Product::try_from)
         .collect()
     }
-    pub fn list_from_shop(db: &mut postgres::Client, shop: &Shop) -> Result<Vec<Product>> {
-        db.query(
-            "SELECT *
-            FROM products
-            WHERE shop_slug = $1",
-            &[&shop.slug],
-        )?
+    pub async fn list_from_shop(db: &Database, shop: &Shop) -> Result<Vec<Product>> {
+        let shop = shop.clone();
+        db.run(move |db| {
+            db.query(
+                "SELECT *
+                FROM products
+                WHERE shop_slug = $1",
+                &[&shop.slug],
+            )
+        })
+        .await?
         .into_iter()
         .map(Product::try_from)
         .collect()
     }
-    pub fn delete(&self, db: &mut postgres::Client) -> Result<()> {
-        db.execute(
-            "DELETE FROM products
-            WHERE slug = $1",
-            &[&self.slug],
-        )?;
+    pub async fn delete(&self, db: &Database) -> Result<()> {
+        let product = self.clone();
+        db.run(move |db| {
+            db.execute(
+                "DELETE FROM products
+                WHERE slug = $1",
+                &[&product.slug],
+            )
+        })
+        .await?;
         Ok(())
     }
-    pub fn update(&self, old_slug: &str, db: &mut postgres::Client) -> Result<()> {
-        db.execute(
-            "UPDATE products SET slug = $1, shop_slug = $2, name = $3, price = $4, available = $5, sold = $6, details = $7, picture = $8
-            WHERE slug = $9",
-            &[
-                &self.slug,
-                &self.shop_slug,
-                &self.name,
-                &self.price,
-                &self.available,
-                &self.sold,
-                &self.details,
-                &self.picture,
-                &old_slug,
-            ],
-        )
-        .map_err(|e| {
-            Error::builder_from(e)
-                .description("Não foi possível atualizar informações")
-        })?;
+    pub async fn update(&self, db: &Database, old_slug: &str) -> Result<()> {
+        let product = self.clone();
+        let old_slug: String = old_slug.into();
+        db.run(move |db| {
+            db.execute(
+                "UPDATE products
+                SET slug = $1,
+                shop_slug = $2,
+                name = $3,
+                price = $4,
+                available = $5,
+                sold = $6,
+                details = $7,
+                picture = $8
+                WHERE slug = $9",
+                &[
+                    &product.slug,
+                    &product.shop_slug,
+                    &product.name,
+                    &product.price,
+                    &product.available,
+                    &product.sold,
+                    &product.details,
+                    &product.picture,
+                    &old_slug,
+                ],
+            )
+            .map_err(|e| {
+                Error::builder_from(e).description("Não foi possível atualizar informações")
+            })
+        })
+        .await?;
+        Ok(())
+    }
+    pub async fn create(&self, db: &Database) -> Result<()> {
+        let product = self.clone();
+        db.run(move |db| {
+            db.execute(
+                "INSERT INTO products
+                (slug, shop_slug, name, price, available, sold, details, picture)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+                &[
+                    &product.slug,
+                    &product.shop_slug,
+                    &product.name,
+                    &product.price,
+                    &product.available,
+                    &product.sold,
+                    &product.details,
+                    &product.picture,
+                ],
+            )
+            .map_err(|e| {
+                Error::builder_from(e)
+                    .code(Status::BadRequest)
+                    .description("O identificador especificado já está registrado")
+            })
+        })
+        .await?;
         Ok(())
     }
 }

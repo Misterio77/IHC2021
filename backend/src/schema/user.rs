@@ -34,7 +34,7 @@ impl<'r> request::FromRequest<'r> for UserToken {
     }
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize)]
 pub struct User {
     pub email: String,
     pub name: String,
@@ -128,9 +128,7 @@ impl User {
                 ],
             )
             .map_err(|e| {
-                Error::builder_from(e)
-                    .code(Status::InternalServerError)
-                    .description("Não foi possível atualizar informações")
+                Error::builder_from(e).description("Não foi possível atualizar informações")
             })
         })
         .await?;
@@ -168,7 +166,8 @@ impl User {
                 Error::builder_from(e)
                     .code(Status::BadRequest)
                     .description("O email especificado já está registrado")
-            })}).await?;
+            })
+        }).await?;
         Ok(())
     }
     /// Dado uma senha em cleartext, verifica se ela bate com o hash armazenado

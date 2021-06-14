@@ -16,7 +16,7 @@ async fn list(db: Database, token: Result<UserToken>) -> Result<Json<Vec<User>>>
         Ok(Json(users))
     } else {
         Err(Error::builder()
-            .code(Status::Unauthorized)
+            .code(Status::Forbidden)
             .description("Você não tem permissão para listar os usuários")
             .build())
     }
@@ -28,14 +28,13 @@ async fn read(db: Database, token: Result<UserToken>, email: String) -> Result<J
     let target = User::read(&db, &email);
 
     let (requester, target) = try_join!(requester, target)?;
-    if requester.email == target.email || requester.admin {
-        Ok(Json(target))
-    } else {
-        Err(Error::builder()
-            .code(Status::Unauthorized)
+    if requester.email != target.email && !requester.admin {
+        return Err(Error::builder()
+            .code(Status::Forbidden)
             .description("Você não tem permissão para ver esse usuário")
-            .build())
+            .build());
     }
+    Ok(Json(target))
 }
 
 #[derive(Debug, Deserialize)]
@@ -91,27 +90,27 @@ async fn update(
     let old_email = target.email.clone();
 
     // Apenas um administrador ou o próprio usuário podem mudar as informações
-    if target.email == requester.email || requester.admin {
-        if let Some(x) = body.email {
-            target.email = x;
-        }
-        if let Some(x) = body.password {
-            target.password = User::hash_password(&x)?;
-        }
-        if let Some(x) = body.name {
-            target.name = x;
-        }
-        if let Some(x) = body.admin {
-            target.admin = x && requester.admin;
-        }
-        target.update(&db, &old_email).await?;
-        Ok(Json(target))
-    } else {
-        Err(Error::builder()
-            .code(Status::Unauthorized)
+    if target.email != requester.email && !requester.admin {
+        return Err(Error::builder()
+            .code(Status::Forbidden)
             .description("Você não tem permissão para modificar esse usuário")
-            .build())
+            .build());
     }
+
+    if let Some(x) = body.email {
+        target.email = x;
+    }
+    if let Some(x) = body.password {
+        target.password = User::hash_password(&x)?;
+    }
+    if let Some(x) = body.name {
+        target.name = x;
+    }
+    if let Some(x) = body.admin {
+        target.admin = x && requester.admin;
+    }
+    target.update(&db, &old_email).await?;
+    Ok(Json(target))
 }
 
 #[delete("/<email>")]
@@ -126,15 +125,14 @@ async fn delete(
 
     let (requester, target) = try_join!(requester, target)?;
     // Apenas um administrador ou o próprio usuário podem apagar
-    if target.email == requester.email || requester.admin {
-        target.delete(&db).await?;
-        Ok(status::NoContent)
-    } else {
-        Err(Error::builder()
-            .code(Status::Unauthorized)
+    if target.email != requester.email && !requester.admin {
+        return Err(Error::builder()
+            .code(Status::Forbidden)
             .description("Você não tem permissão para remover esse usuário")
-            .build())
+            .build());
     }
+    target.delete(&db).await?;
+    Ok(status::NoContent)
 }
 
 pub fn routes() -> Vec<rocket::Route> {

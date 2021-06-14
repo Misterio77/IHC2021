@@ -4,7 +4,7 @@ use postgres::Row;
 use rust_decimal::Decimal;
 use std::convert::TryFrom;
 
-#[derive(Debug)]
+#[derive(PartialEq, Eq, Debug)]
 pub struct Purchase {
     pub id: i32,
     pub amount: i32,
