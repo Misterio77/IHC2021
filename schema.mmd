@@ -1,0 +1,36 @@
+erDiagram
+USERS {
+    String email
+    String name
+    String password
+    String token
+    bool admin
+}
+USERS ||--o{ SHOPS: "owner"
+SHOPS {
+    String slug
+    String color
+    String logo_url
+    String owner_email
+}
+PRODUCTS {
+    String slug
+    String name
+    String details
+    String picture_url
+    Decimal price
+    i32 available
+    i32 sold
+    String shop_slug
+}
+SHOPS ||--o{ PRODUCTS: "shop"
+PURCHASES {
+    i32 id
+    i32 amount
+    Numeric paid
+    DateTime time
+    String product_slug
+    String purchaser_email
+}
+PURCHASES }o--|| USERS: "purchaser"
+PURCHASES }o--|| PRODUCTS: "product"
