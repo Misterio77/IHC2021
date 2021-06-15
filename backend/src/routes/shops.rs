@@ -4,7 +4,7 @@ use futures::try_join;
 use rocket::http::Status;
 use rocket::response::status;
 use rocket::serde::json::Json;
-use rocket::{delete, get, post, put};
+use rocket::{delete, get, patch, post};
 use serde::Deserialize;
 
 #[get("/?<owner>")]
@@ -47,7 +47,8 @@ struct CreateRequest {
     slug: String,
     name: String,
     color: String,
-    owner_email: String,
+    logo: String,
+    owner: String,
 }
 
 #[post("/", data = "<body>")]
@@ -63,7 +64,8 @@ async fn create(
         slug: body.slug,
         name: body.name,
         color: body.color.replace("#", ""),
-        owner_email: body.owner_email,
+        logo: body.logo,
+        owner: body.owner,
     };
 
     if shop.color.len() > 6 {
@@ -74,7 +76,7 @@ async fn create(
     }
 
     // Retornar erro caso o usuário esteja criando uma loja em um nome que não o dele
-    if requester.email != shop.owner_email && !requester.admin {
+    if requester.email != shop.owner && !requester.admin {
         return Err(Error::builder()
             .code(Status::Forbidden)
             .description("Você não tem permissão para criar uma loja em nome de outra pessoa")
@@ -93,10 +95,11 @@ struct UpdateRequest {
     slug: Option<String>,
     name: Option<String>,
     color: Option<String>,
-    owner_email: Option<String>,
+    logo: Option<String>,
+    owner: Option<String>,
 }
 
-#[put("/<slug>", data = "<body>")]
+#[patch("/<slug>", data = "<body>")]
 async fn update(
     db: Database,
     slug: String,
@@ -113,7 +116,7 @@ async fn update(
     let old_slug = shop.slug.clone();
 
     // Retornar erro caso o usuário esteja alterando uma loja que não é dele
-    if requester.email != shop.owner_email && !requester.admin {
+    if requester.email != shop.owner && !requester.admin {
         return Err(Error::builder()
             .code(Status::Forbidden)
             .description("Você não tem permissão para modificar essa loja")
@@ -130,12 +133,15 @@ async fn update(
     if let Some(x) = body.color {
         shop.color = x.replace("#", "");
     }
-    if let Some(x) = body.owner_email {
-        shop.owner_email = x;
+    if let Some(x) = body.logo {
+        shop.logo = x;
+    }
+    if let Some(x) = body.owner {
+        shop.owner = x;
     }
 
     // Retornar erro caso o usuário esteja trocando posse da loja
-    if requester.email != shop.owner_email && !requester.admin {
+    if requester.email != shop.owner && !requester.admin {
         return Err(Error::builder()
             .code(Status::Forbidden)
             .description("Você não tem permissão para trocar o dono de uma loja")
@@ -153,7 +159,7 @@ async fn delete(db: Database, slug: String, token: Result<UserToken>) -> Result<
     let shop = Shop::read(&db, &slug);
     let (shop, requester) = try_join!(shop, requester)?;
 
-    if requester.email != shop.owner_email && !requester.admin {
+    if requester.email != shop.owner && !requester.admin {
         return Err(Error::builder()
             .code(Status::Forbidden)
             .description("Você não tem permissão para remover essa loja")

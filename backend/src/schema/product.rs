@@ -10,7 +10,7 @@ use std::convert::{TryFrom, TryInto};
 #[derive(Clone, PartialEq, Eq, Debug, Serialize)]
 pub struct Product {
     pub slug: String,
-    pub shop_slug: String,
+    pub shop: String,
     pub name: String,
     pub price: Decimal,
     pub available: i32,
@@ -24,7 +24,7 @@ impl TryFrom<Row> for Product {
     fn try_from(row: Row) -> Result<Self> {
         Ok(Self {
             slug: row.try_get("slug")?,
-            shop_slug: row.try_get("shop_slug")?,
+            shop: row.try_get("shop")?,
             name: row.try_get("name")?,
             price: row.try_get("price")?,
             available: row.try_get("available")?,
@@ -73,7 +73,7 @@ impl Product {
             db.query(
                 "SELECT *
                 FROM products
-                WHERE shop_slug = $1",
+                WHERE shop = $1",
                 &[&shop.slug],
             )
         })
@@ -101,7 +101,7 @@ impl Product {
             db.execute(
                 "UPDATE products
                 SET slug = $1,
-                shop_slug = $2,
+                shop = $2,
                 name = $3,
                 price = $4,
                 available = $5,
@@ -111,7 +111,7 @@ impl Product {
                 WHERE slug = $9",
                 &[
                     &product.slug,
-                    &product.shop_slug,
+                    &product.shop,
                     &product.name,
                     &product.price,
                     &product.available,
@@ -133,11 +133,11 @@ impl Product {
         db.run(move |db| {
             db.execute(
                 "INSERT INTO products
-                (slug, shop_slug, name, price, available, sold, details, picture)
+                (slug, shop, name, price, available, sold, details, picture)
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
                 &[
                     &product.slug,
-                    &product.shop_slug,
+                    &product.shop,
                     &product.name,
                     &product.price,
                     &product.available,

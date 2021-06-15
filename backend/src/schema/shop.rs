@@ -11,8 +11,9 @@ pub struct Shop {
     pub slug: String,
     pub name: String,
     pub color: String,
+    pub logo: String,
     #[serde(skip_serializing)]
-    pub owner_email: String,
+    pub owner: String,
 }
 
 impl TryFrom<Row> for Shop {
@@ -22,7 +23,8 @@ impl TryFrom<Row> for Shop {
             slug: row.try_get("slug")?,
             name: row.try_get("name")?,
             color: row.try_get("color")?,
-            owner_email: row.try_get("owner_email")?,
+            logo: row.try_get("logo")?,
+            owner: row.try_get("owner")?,
         })
     }
 }
@@ -65,7 +67,7 @@ impl Shop {
             db.query(
                 "SELECT *
                 FROM shops
-                WHERE owner_email = $1",
+                WHERE owner = $1",
                 &[&user.email],
             )
         })
@@ -91,13 +93,14 @@ impl Shop {
         let shop = self.clone();
         db.run(move |db| {
             db.execute(
-                "UPDATE shops SET slug = $1, name = $2, color = $3, owner_email = $4
-                WHERE slug = $5",
+                "UPDATE shops SET slug = $1, name = $2, color = $3, logo = $4, owner = $5
+                WHERE slug = $6",
                 &[
                     &shop.slug,
                     &shop.name,
                     &shop.color,
-                    &shop.owner_email,
+                    &shop.logo,
+                    &shop.owner,
                     &old_slug,
                 ],
             )
@@ -112,8 +115,8 @@ impl Shop {
         let shop = self.clone();
         db.run(move |db| {
             db.execute(
-                "INSERT INTO shops (slug, name, color, owner_email) VALUES ($1, $2, $3, $4)",
-                &[&shop.slug, &shop.name, &shop.color, &shop.owner_email],
+                "INSERT INTO shops (slug, name, color, logo, owner) VALUES ($1, $2, $3, $4, $5)",
+                &[&shop.slug, &shop.name, &shop.color, &shop.logo, &shop.owner],
             )
             .map_err(|e| {
                 Error::builder_from(e)

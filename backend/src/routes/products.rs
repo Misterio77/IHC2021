@@ -4,7 +4,7 @@ use futures::try_join;
 use rocket::http::Status;
 use rocket::response::status;
 use rocket::serde::json::Json;
-use rocket::{delete, get, post, put};
+use rocket::{delete, get, patch, post};
 use rust_decimal::Decimal;
 use serde::Deserialize;
 
@@ -30,7 +30,7 @@ async fn read(db: Database, slug: String) -> Result<Json<Product>> {
 #[derive(Debug, Deserialize)]
 struct CreateRequest {
     slug: String,
-    shop_slug: String,
+    shop: String,
     name: String,
     price: Decimal,
     available: i32,
@@ -50,7 +50,7 @@ async fn create(
     let requester_shops = Shop::list_from_user(&db, &requester).await?;
     let product = Product {
         slug: body.slug,
-        shop_slug: body.shop_slug,
+        shop: body.shop,
         name: body.name,
         price: body.price,
         available: body.available,
@@ -61,12 +61,12 @@ async fn create(
     // Caso esse usuário não tenha permissão de adicionar produtos à essa loja
     if !requester_shops
         .iter()
-        .any(|shop| shop.slug == product.shop_slug)
+        .any(|shop| shop.slug == product.shop)
         && !requester.admin
     {
         return Err(Error::builder()
             .code(Status::Unauthorized)
-            .description("Você não tem permissão ppara adicionar produtos à essa loja")
+            .description("Você não tem permissão para adicionar produtos à essa loja")
             .build());
     }
 
@@ -81,7 +81,7 @@ async fn create(
 #[derive(Debug, Deserialize)]
 struct UpdateRequest {
     slug: Option<String>,
-    shop_slug: Option<String>,
+    shop: Option<String>,
     name: Option<String>,
     price: Option<Decimal>,
     available: Option<i32>,
@@ -90,7 +90,7 @@ struct UpdateRequest {
     picture: Option<String>,
 }
 
-#[put("/<slug>", data = "<body>")]
+#[patch("/<slug>", data = "<body>")]
 async fn update(
     db: Database,
     slug: String,
@@ -106,7 +106,7 @@ async fn update(
 
     if !requester_shops
         .iter()
-        .any(|shop| shop.slug == product.shop_slug)
+        .any(|shop| shop.slug == product.shop)
         && !requester.admin
     {
         return Err(Error::builder()
@@ -120,8 +120,8 @@ async fn update(
     if let Some(x) = body.slug {
         product.slug = x;
     }
-    if let Some(x) = body.shop_slug {
-        product.shop_slug = x;
+    if let Some(x) = body.shop {
+        product.shop = x;
     }
     if let Some(x) = body.name {
         product.name = x;
@@ -144,7 +144,7 @@ async fn update(
 
     if !requester_shops
         .iter()
-        .any(|shop| shop.slug == product.shop_slug)
+        .any(|shop| shop.slug == product.shop)
         && !requester.admin
     {
         return Err(Error::builder()
@@ -167,7 +167,7 @@ async fn delete(db: Database, slug: String, token: Result<UserToken>) -> Result<
 
     if !requester_shops
         .iter()
-        .any(|shop| shop.slug == product.shop_slug)
+        .any(|shop| shop.slug == product.shop)
         && !requester.admin
     {
         return Err(Error::builder()

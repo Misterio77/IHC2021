@@ -4,7 +4,7 @@ use futures::try_join;
 use rocket::http::Status;
 use rocket::response::status;
 use rocket::serde::json::Json;
-use rocket::{delete, get, post, put};
+use rocket::{delete, get, patch, post};
 use serde::Deserialize;
 
 #[get("/")]
@@ -74,7 +74,7 @@ struct UpdateRequest {
     name: Option<String>,
     admin: Option<bool>,
 }
-#[put("/<email>", data = "<body>")]
+#[patch("/<email>", data = "<body>")]
 async fn update(
     db: Database,
     token: Result<UserToken>,
