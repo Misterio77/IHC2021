@@ -1,0 +1,28 @@
+{% extends "base" %}
+{% block navbar %}
+<header>
+<nav class="fixed">
+    <a href="/" class="logo">
+      <section class="logo-icon">{% include "logo" %}</section>
+      <h1>Cinco Bola</h1>
+    </a>
+  <ul>
+    <li>
+      <a href="/shops"><em>Lojas</em>
+      </a>
+    </li>
+    <li>
+      <a href="/login"><strong>Console</strong>
+      </a>
+    </li>
+  </ul>
+</nav>
+</header>
+{% endblock navbar %}
+
+{% block content %}
+{% endblock content %}
+
+<!--
+vim: set filetype=html:
+-->

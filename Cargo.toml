@@ -25,6 +25,10 @@ features = ["json"]
 version = "0.1.0-rc.1"
 features = ["postgres_pool"]
 
+[dependencies.rocket_dyn_templates]
+version = "0.1.0-rc.1"
+features = ["tera"]
+
 [dependencies.rust_decimal]
 version = "1.14"
 features = ["db-postgres"]

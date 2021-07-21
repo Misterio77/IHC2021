@@ -1,0 +1,46 @@
+{% extends "cincobola" %}
+
+{% block content %}
+<main>
+<header>
+  <section class="splash-icon">{% include "logo" %}</section>
+  <h1>Cinco Bola</h1>
+  <h2>Descomplicando o ecommerce universitário</h2>
+  <a href="/register"><strong>Crie sua loja</strong></a>
+</header>
+
+<hr />
+<section>
+  <header>
+    <h2>Uma loja para sua entidade estudantil</h2>
+    <p>Tudo que você precisa</p>
+  </header>
+
+  <aside>
+    <span class="iconify card-icon" data-icon="mdi:finance"></span>
+    <h3>Métricas</h3>
+    <p>
+      Tenha relatórios detalhados de estoque, compras, engajamento, e
+      logísticas.
+    </p>
+  </aside>
+  <aside>
+    <span class="iconify card-icon" data-icon="mdi:sale"></span>
+    <h3>Promoções</h3>
+    <p>Conquiste seus clientes com promoções personalizadas e eficazes.</p>
+  </aside>
+  <aside>
+    <span class="iconify card-icon" data-icon="mdi:bank-check"></span>
+    <h3>Financeiro</h3>
+    <p>
+      Universitários gostam de pagar das mais diferentes maneiras. Suportamos
+      todas.
+    </p>
+  </aside>
+</section>
+</main>
+{% endblock content %}
+
+<!--
+vim: set filetype=html:
+-->

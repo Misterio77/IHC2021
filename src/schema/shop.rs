@@ -10,10 +10,11 @@ use std::convert::{TryFrom, TryInto};
 pub struct Shop {
     pub slug: String,
     pub name: String,
-    pub color: String,
+    pub color_dark: String,
+    pub color_light: String,
     pub logo: String,
     #[serde(skip_serializing)]
-    pub owner: String,
+    pub manager: String,
 }
 
 impl TryFrom<Row> for Shop {
@@ -22,9 +23,10 @@ impl TryFrom<Row> for Shop {
         Ok(Self {
             slug: row.try_get("slug")?,
             name: row.try_get("name")?,
-            color: row.try_get("color")?,
+            color_dark: row.try_get("color_dark")?,
+            color_light: row.try_get("color_light")?,
             logo: row.try_get("logo")?,
-            owner: row.try_get("owner")?,
+            manager: row.try_get("manager")?,
         })
     }
 }
@@ -67,7 +69,7 @@ impl Shop {
             db.query(
                 "SELECT *
                 FROM shops
-                WHERE owner = $1",
+                WHERE manager = $1",
                 &[&user.email],
             )
         })
@@ -93,14 +95,15 @@ impl Shop {
         let shop = self.clone();
         db.run(move |db| {
             db.execute(
-                "UPDATE shops SET slug = $1, name = $2, color = $3, logo = $4, owner = $5
+                "UPDATE shops SET slug = $1, name = $2, color_dark = $3, color_light = $4, logo = $5, manager = $6
                 WHERE slug = $6",
                 &[
                     &shop.slug,
                     &shop.name,
-                    &shop.color,
+                    &shop.color_dark,
+                    &shop.color_light,
                     &shop.logo,
-                    &shop.owner,
+                    &shop.manager,
                     &old_slug,
                 ],
             )
@@ -115,8 +118,8 @@ impl Shop {
         let shop = self.clone();
         db.run(move |db| {
             db.execute(
-                "INSERT INTO shops (slug, name, color, logo, owner) VALUES ($1, $2, $3, $4, $5)",
-                &[&shop.slug, &shop.name, &shop.color, &shop.logo, &shop.owner],
+                "INSERT INTO shops (slug, name, color_dark, color_light, logo, manager) VALUES ($1, $2, $3, $4, $5, $6)",
+                &[&shop.slug, &shop.name, &shop.color_dark, &shop.color_light, &shop.logo, &shop.manager],
             )
             .map_err(|e| {
                 Error::builder_from(e)

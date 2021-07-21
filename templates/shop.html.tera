@@ -1,0 +1,40 @@
+<style>
+.{{ shop.slug }} {
+  --color: {{ shop.dark-color }};
+  --color-accent: {{ shop.dark-color }}15;
+}
+.{{ shop.slug }}.dark {
+    --color: {{ shop.light-color }};
+    --color-accent: {{ shop.light-color }}4f;
+}
+</style>
+<header>
+  <nav class="fixed">
+      <a href="/shops/{{ shop.slug }}" class="logo">
+        <section class="logo-icon">{{ shop.logo }}</section>
+        <h1>{{ shop.name }}</h1>
+      </a>
+      <ul>
+        <li>
+          <a href="/shops/{{ shop.slug }}/cart" aria-label="Carrinho"><b>
+            <span class="iconify nav-icon" data-icon="mdi:cart"></span>
+            </b></a>
+        </li>
+        <li>
+          <a href="/shops/{{ shop.slug }}/profile" aria-label="Perfil"><i>
+            <span class="iconify nav-icon" data-icon="mdi:account"></span>
+          </i></a>
+        </li>
+      </ul>
+  </nav>
+</header>
+<main>
+  {{ content }}
+</main>
+<footer>
+  {% include "footer.html" %}
+</footer>
+
+<!--
+vim: set filetype=html:
+-->

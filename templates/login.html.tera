@@ -1,0 +1,34 @@
+<section>
+  <form method="get" action="/console">
+    <header><h1>Acesse sua conta</h1></header>
+
+    <label for="email"> Email: </label>
+    <input
+      type="email"
+      inputmode="email"
+      autocomplete="email"
+      name="email"
+      id="email"
+      placeholder="fulano@exemplo.com"
+    />
+
+    <label for="password"> Senha: </label>
+    <input
+      type="password"
+      autocomplete="current-password"
+      name="password"
+      id="password"
+      placeholder="••••••••••••"
+    />
+
+    <button type="submit">Login</button>
+
+    <footer>
+      <a href="/register">Não tem uma conta?</a>
+    </footer>
+  </form>
+</section>
+
+<!--
+vim: set filetype=html:
+-->

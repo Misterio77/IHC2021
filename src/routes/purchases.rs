@@ -2,7 +2,6 @@ use crate::schema::{Product, Purchase, Shop, User, UserToken};
 use crate::{BodyResult, Database, Error, Result};
 use futures::try_join;
 use rocket::http::Status;
-use rocket::response::status;
 use rocket::serde::json::Json;
 use rocket::{get, post};
 use serde::Deserialize;
@@ -69,7 +68,7 @@ async fn list_by_shop(
     let target = Shop::read(&db, &shop);
 
     let (requester, target) = try_join!(requester, target)?;
-    if requester.email != target.owner && !requester.admin {
+    if requester.email != target.manager && !requester.admin {
         return Err(Error::builder()
             .code(Status::Unauthorized)
             .description("Você não tem permissão para listar compras dessa loja")

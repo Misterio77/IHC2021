@@ -19,21 +19,7 @@ SET client_min_messages = warning;
 
 SET row_security = OFF;
 
-CREATE EXTENSION IF NOT EXISTS citext WITH SCHEMA public;
-
-COMMENT ON EXTENSION citext IS 'data type for case-insensitive character strings';
-
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA public;
-
-COMMENT ON EXTENSION "uuid-ossp" IS 'generate universally unique identifiers (UUIDs)';
-
 CREATE DOMAIN public.email AS public.citext CONSTRAINT email_check CHECK ((VALUE OPERATOR (public. ~) '^[a-zA-Z0-9.!#$%&''*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)*$'::public.citext));
-
-ALTER DOMAIN public.email OWNER TO misterio;
-
-SET default_tablespace = '';
-
-SET default_table_access_method = heap;
 
 CREATE TABLE public.products (
     slug text NOT NULL,
@@ -46,8 +32,6 @@ CREATE TABLE public.products (
     picture text NOT NULL
 );
 
-ALTER TABLE public.products OWNER TO misterio;
-
 CREATE TABLE public.purchases (
     product text,
     amount integer NOT NULL,
@@ -55,8 +39,6 @@ CREATE TABLE public.purchases (
     purchaser public.citext,
     "time" timestamp with time zone NOT NULL
 );
-
-ALTER TABLE public.purchases OWNER TO misterio;
 
 COMMENT ON COLUMN public.purchases.product IS 'Nullable to keep record even for deleted products';
 
@@ -69,17 +51,14 @@ CREATE SEQUENCE public.purchases_id_seq
     NO MAXVALUE
     CACHE 1;
 
-ALTER TABLE public.purchases_id_seq OWNER TO misterio;
-
 CREATE TABLE public.shops (
     slug text NOT NULL,
     name text NOT NULL,
-    color character varying(6) NOT NULL,
-    OWNER public.citext NOT NULL,
+    color_dark character varying(6) NOT NULL,
+    color_light character varying(6) NOT NULL,
+    manager public.citext NOT NULL,
     logo text NOT NULL
 );
-
-ALTER TABLE public.shops OWNER TO misterio;
 
 COMMENT ON COLUMN public.shops.slug IS 'Shop slug name';
 
@@ -90,8 +69,6 @@ CREATE TABLE public.users (
     admin boolean NOT NULL,
     token text DEFAULT 'NULL' ::text
 );
-
-ALTER TABLE public.users OWNER TO misterio;
 
 COMMENT ON COLUMN public.users.email IS 'User email';
 
@@ -117,5 +94,5 @@ ALTER TABLE ONLY public.purchases
     ADD CONSTRAINT sales_purchaser_email_fkey FOREIGN KEY (purchaser) REFERENCES public.users (email) ON UPDATE CASCADE ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.shops
-    ADD CONSTRAINT shops_owner_email_fkey FOREIGN KEY (OWNER) REFERENCES public.users (email) ON UPDATE CASCADE ON DELETE CASCADE;
+    ADD CONSTRAINT shops_owner_email_fkey FOREIGN KEY (manager) REFERENCES public.users (email) ON UPDATE CASCADE ON DELETE CASCADE;
 
